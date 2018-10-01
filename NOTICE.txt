@@ -1981,7 +1981,7 @@ This product contains 'reselect' by Redux.
 Selectors for Redux.
 
 * HOMEPAGE:
-  * https://github.com/reactjs/reselect#readme
+  * https://github.com/reduxjs/reselect#readme
 
 * LICENSE: MIT
 
