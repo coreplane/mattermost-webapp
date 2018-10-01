@@ -123,49 +123,82 @@ export function isSystemAdmin(roles) {
     return false;
 }
 
-var requestedNotificationPermission = false;
+let requestedNotificationPermission = false;
+
+// showNotification displays a platform notification with the configured parameters.
+//
+// If successful in showing a notification, it resolves with a callback to manually close the
+// notification. Notifications that do not require interaction will be closed automatically after
+// the Constants.DEFAULT_NOTIFICATION_DURATION. Not all platforms support all features, and may
+// choose different semantics for the notifications.
+export async function showNotification({title, body, requireInteraction, silent, onClick}) {
+    let icon = icon50;
+    if (UserAgent.isEdge()) {
+        icon = iconWS;
+    }
+
+    if (!('Notification' in window)) {
+        throw new Error('Notification not supported');
+    }
+
+    if (typeof Notification.requestPermission !== 'function') {
+        throw new Error('Notifications.requestPermission not supported');
+    }
+
+    if (Notification.permission !== 'granted' && requestedNotificationPermission) {
+        throw new Error('Notifications already requested but not granted');
+    }
+
+    requestedNotificationPermission = true;
+
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+        throw new Error('Notifications not granted');
+    }
+
+    const notification = new Notification(title, {
+        body,
+        tag: body,
+        icon,
+        requireInteraction,
+        silent,
+    });
+
+    if (onClick) {
+        notification.onclick = onClick;
+    }
+
+    if (!requireInteraction) {
+        setTimeout(() => {
+            notification.close();
+        }, Constants.DEFAULT_NOTIFICATION_DURATION);
+    }
+
+    return () => {
+        notification.close();
+    };
+}
 
 export function notifyMe(title, body, channel, teamId, silent) {
-    if (!('Notification' in window)) {
-        return;
-    }
-
-    if (Notification.permission === 'granted' || (Notification.permission === 'default' && !requestedNotificationPermission)) {
-        requestedNotificationPermission = true;
-
-        if (typeof Notification.requestPermission === 'function') {
-            Notification.requestPermission((permission) => {
-                if (permission === 'granted') {
-                    try {
-                        let icon = icon50;
-                        if (UserAgent.isEdge()) {
-                            icon = iconWS;
-                        }
-
-                        const notification = new Notification(title, {body, tag: body, icon, requireInteraction: false, silent});
-                        notification.onclick = () => {
-                            window.focus();
-                            if (channel && (channel.type === Constants.DM_CHANNEL || channel.type === Constants.GM_CHANNEL)) {
-                                browserHistory.push(TeamStore.getCurrentTeamRelativeUrl() + '/channels/' + channel.name);
-                            } else if (channel) {
-                                browserHistory.push(TeamStore.getTeamRelativeUrl(teamId) + '/channels/' + channel.name);
-                            } else if (teamId) {
-                                browserHistory.push(TeamStore.getTeamRelativeUrl(teamId) + `/channels/${Constants.DEFAULT_CHANNEL}`);
-                            } else {
-                                browserHistory.push(TeamStore.getCurrentTeamRelativeUrl() + `/channels/${Constants.DEFAULT_CHANNEL}`);
-                            }
-                        };
-
-                        setTimeout(() => {
-                            notification.close();
-                        }, Constants.DEFAULT_NOTIFICATION_DURATION);
-                    } catch (e) {
-                        console.error(e); //eslint-disable-line no-console
-                    }
-                }
-            });
-        }
-    }
+    showNotification({title,
+        body,
+        requireInteraction: false,
+        silent,
+        onClick: () => {
+            window.focus();
+            if (channel && (channel.type === Constants.DM_CHANNEL || channel.type === Constants.GM_CHANNEL)) {
+                browserHistory.push(TeamStore.getCurrentTeamRelativeUrl() + '/channels/' + channel.name);
+            } else if (channel) {
+                browserHistory.push(TeamStore.getTeamRelativeUrl(teamId) + '/channels/' + channel.name);
+            } else if (teamId) {
+                browserHistory.push(TeamStore.getTeamRelativeUrl(teamId) + `/channels/${Constants.DEFAULT_CHANNEL}`);
+            } else {
+                browserHistory.push(TeamStore.getCurrentTeamRelativeUrl() + `/channels/${Constants.DEFAULT_CHANNEL}`);
+            }
+        },
+    }).catch(() => {
+        // Ignore the failure to display the notification.
+    });
 }
 
 var canDing = true;
@@ -576,7 +609,7 @@ export function applyTheme(theme) {
         changeCss('.sidebar--left .team__header .user__name, .app__body .sidebar--menu .team__header .user__name', 'color:' + changeOpacity(theme.sidebarHeaderTextColor, 0.8));
         changeCss('.sidebar--left .team__header:hover .user__name, .app__body .sidebar--menu .team__header:hover .user__name', 'color:' + theme.sidebarHeaderTextColor);
         changeCss('.app__body .modal .modal-header .modal-title, .app__body .modal .modal-header .modal-title .name, .app__body .modal .modal-header button.close', 'color:' + theme.sidebarHeaderTextColor);
-        changeCss('.app__body #navbar .navbar-default .navbar-brand .dropdown-toggle', 'color:' + theme.sidebarHeaderTextColor);
+        changeCss('.app__body #navbar .navbar-default .navbar-brand', 'color:' + theme.sidebarHeaderTextColor);
         changeCss('.app__body #navbar .navbar-default .navbar-toggle .icon-bar', 'background:' + theme.sidebarHeaderTextColor);
         changeCss('.app__body .post-list__timestamp > div, .app__body .multi-teams .team-sidebar .team-wrapper .team-container a:hover .team-btn__content, .app__body .multi-teams .team-sidebar .team-wrapper .team-container.active .team-btn__content', 'border-color:' + changeOpacity(theme.sidebarHeaderTextColor, 0.5));
         changeCss('.app__body .team-btn', 'border-color:' + changeOpacity(theme.sidebarHeaderTextColor, 0.3));
@@ -701,9 +734,10 @@ export function applyTheme(theme) {
         changeCss('.app__body .channel-header__icon svg', 'fill:' + changeOpacity(theme.centerChannelColor, 0.4));
         changeCss('.app__body .channel-header__icon .icon--stroke svg', 'stroke:' + changeOpacity(theme.centerChannelColor, 0.4));
         changeCss('.app__body .channel-header__icon .icon--stroke.icon__search svg', 'stroke:' + changeOpacity(theme.centerChannelColor, 0.55));
+        changeCss('.app__body path.file-upload-progress__circle-trail', 'stroke:' + changeOpacity(theme.centerChannelColor, 0.2));
         changeCss('.app__body .modal .status .offline--icon, .app__body .channel-header__links .icon, .app__body .sidebar--right .sidebar--right__subheader .usage__icon, .app__body .more-modal__header svg, .app__body .icon--body', 'fill:' + theme.centerChannelColor);
         changeCss('@media(min-width: 768px){.app__body .post:hover .post__header .col__reply, .app__body .post.post--hovered .post__header .col__reply', 'border-color:' + changeOpacity(theme.centerChannelColor, 0.2));
-        changeCss('.app__body .DayPicker .DayPicker-Caption, .app__body .modal .settings-modal .team-img-preview div, .app__body .modal .settings-modal .team-img__container div, .app__body .system-notice__footer, .app__body .system-notice__footer .btn:last-child, .app__body .modal .shortcuts-modal .subsection, .app__body .sidebar--right .sidebar--right__header, .app__body .channel-header, .app__body .nav-tabs > li > a:hover, .app__body .nav-tabs, .app__body .nav-tabs > li.active > a, .app__body .nav-tabs, .app__body .nav-tabs > li.active > a:focus, .app__body .nav-tabs, .app__body .nav-tabs > li.active > a:hover, .app__body .post .dropdown-menu a, .sidebar--left, .app__body .suggestion-list__content .command, .app__body .channel-archived__message', 'border-color:' + changeOpacity(theme.centerChannelColor, 0.2));
+        changeCss('.post .attachment .attachment__image.attachment__image--opengraph, .app__body .DayPicker .DayPicker-Caption, .app__body .modal .settings-modal .team-img-preview div, .app__body .modal .settings-modal .team-img__container div, .app__body .system-notice__footer, .app__body .system-notice__footer .btn:last-child, .app__body .modal .shortcuts-modal .subsection, .app__body .sidebar--right .sidebar--right__header, .app__body .channel-header, .app__body .nav-tabs > li > a:hover, .app__body .nav-tabs, .app__body .nav-tabs > li.active > a, .app__body .nav-tabs, .app__body .nav-tabs > li.active > a:focus, .app__body .nav-tabs, .app__body .nav-tabs > li.active > a:hover, .app__body .post .dropdown-menu a, .sidebar--left, .app__body .suggestion-list__content .command, .app__body .channel-archived__message', 'border-color:' + changeOpacity(theme.centerChannelColor, 0.2));
         changeCss('.app__body .post.post--system .post__body, .app__body .modal .channel-switch-modal .modal-header .close', 'color:' + changeOpacity(theme.centerChannelColor, 0.6));
         changeCss('.app__body .nav-tabs, .app__body .nav-tabs > li.active > a, pp__body .input-group-addon, .app__body .app__content, .app__body .post-create__container .post-create-body .btn-file, .app__body .post-create__container .post-create-footer .msg-typing, .app__body .suggestion-list__content .command, .app__body .modal .modal-content, .app__body .dropdown-menu, .app__body .popover, .app__body .mentions__name, .app__body .tip-overlay, .app__body .form-control[disabled], .app__body .form-control[readonly], .app__body fieldset[disabled] .form-control', 'color:' + theme.centerChannelColor);
         changeCss('.app__body .post .post__link', 'color:' + changeOpacity(theme.centerChannelColor, 0.65));
@@ -794,6 +828,8 @@ export function applyTheme(theme) {
         changeCss('.app__body .emoji-picker .nav-tabs li a', 'fill:' + theme.centerChannelColor);
         changeCss('.app__body .post .post-collapse__show-more-button', `border-color:${changeOpacity(theme.centerChannelColor, 0.1)}`);
         changeCss('.app__body .post .post-collapse__show-more-line', `background-color:${changeOpacity(theme.centerChannelColor, 0.1)}`);
+        changeCss('.file-upload-progress__circle .file-upload-progress__circle-path, .file-upload-progress__circle .file-upload-progress__inside-text', 'stroke:' + theme.centerChannelColor);
+        changeCss('.file-upload-progress__circle .file-upload-progress__circle-path, .file-upload-progress__circle .file-upload-progress__inside-text', 'fill:' + theme.centerChannelColor);
 
         if (theme.centerChannelBg) {
             const ownPostBg = blendColors(theme.centerChannelBg, theme.centerChannelColor, 0.05);
@@ -939,7 +975,7 @@ export function applyTheme(theme) {
         changeCss('.app__body .channel-header .channel-header__icon:hover #member_popover, .app__body .channel-header .channel-header__icon.active #member_popover', 'color:' + theme.linkColor);
         changeCss('.app__body .channel-header .pinned-posts-button:hover svg', 'fill:' + changeOpacity(theme.linkColor, 0.6));
         changeCss('.app__body .member-list__popover .more-modal__actions svg, .app__body .channel-header .channel-header__icon:hover svg, .app__body .channel-header .channel-header__icon.active svg', 'fill:' + theme.linkColor);
-        changeCss('.app__body .channel-header .channel-header__icon:hover .icon--stroke svg', 'stroke:' + theme.linkColor);
+        changeCss('.app__body .channel-header .channel-header__icon:hover .icon--stroke svg, .app__body .file-upload-progress__circle .file-upload-progress__circle-path, .file-upload-progress__circle .file-upload-progress__inside-text ', 'stroke:' + theme.linkColor);
         changeCss('.app__body .post-reaction.post-reaction--current-user', 'background:' + changeOpacity(theme.linkColor, 0.1));
         changeCss('.app__body .post-add-reaction:hover .post-reaction, .app__body .post-reaction.post-reaction--current-user', 'border-color:' + changeOpacity(theme.linkColor, 0.4));
         changeCss('.app__body .channel-header .channel-header_plugin-dropdown a:hover, .app__body .member-list__popover .more-modal__list .more-modal__row:hover, .app__body .channel-header .channel-header__icon:hover, .app__body .channel-header .channel-header__icon.active, .app__body .search-bar__container .search__form.focused, .app__body .search-bar__container .search__form:hover', 'border-color:' + theme.linkColor);

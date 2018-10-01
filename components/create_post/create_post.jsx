@@ -3,7 +3,6 @@
 
 import PropTypes from 'prop-types';
 import React from 'react';
-import ReactDOM from 'react-dom';
 import {FormattedMessage} from 'react-intl';
 
 import {Posts} from 'mattermost-redux/constants';
@@ -14,14 +13,14 @@ import * as GlobalActions from 'actions/global_actions.jsx';
 import {emitEmojiPosted} from 'actions/post_actions.jsx';
 import EmojiStore from 'stores/emoji_store.jsx';
 import Constants, {StoragePrefixes, ModalIdentifiers} from 'utils/constants.jsx';
-import * as PostUtils from 'utils/post_utils.jsx';
+import {containsAtChannel, postMessageOnKeyPress, shouldFocusMainTextbox} from 'utils/post_utils.jsx';
 import * as UserAgent from 'utils/user_agent.jsx';
 import * as Utils from 'utils/utils.jsx';
 
 import ConfirmModal from 'components/confirm_modal.jsx';
 import EditChannelHeaderModal from 'components/edit_channel_header_modal';
 import EmojiPickerOverlay from 'components/emoji_picker/emoji_picker_overlay.jsx';
-import FilePreview from 'components/file_preview.jsx';
+import FilePreview from 'components/file_preview/file_preview.jsx';
 import FileUpload from 'components/file_upload';
 import MsgTyping from 'components/msg_typing';
 import PostDeletedModal from 'components/post_deleted_modal.jsx';
@@ -61,6 +60,11 @@ export default class CreatePost extends React.Component {
         *  Data used for posting message
         */
         currentUserId: PropTypes.string,
+
+        /**
+         * Force message submission on CTRL/CMD + ENTER
+         */
+        codeBlockOnCtrlEnter: PropTypes.bool,
 
         /**
         *  Flag used for handling submit
@@ -219,9 +223,12 @@ export default class CreatePost extends React.Component {
             enableSendButton: false,
             showEmojiPicker: false,
             showConfirmModal: false,
+            handleUploadProgress: {},
+            actualDrafts: {},
         };
 
         this.lastBlurAt = 0;
+        this.draftsTimeout = null;
     }
 
     UNSAFE_componentWillMount() { // eslint-disable-line camelcase
@@ -264,6 +271,12 @@ export default class CreatePost extends React.Component {
 
     componentWillUnmount() {
         document.removeEventListener('keydown', this.documentKeyHandler);
+        if (this.draftsTimeout) {
+            clearTimeout(this.draftsTimeout);
+            const draft = {...this.state.actualDrafts};
+            draft.message = this.props.draft.message;
+            this.props.actions.setDraft(StoragePrefixes.DRAFT + this.props.currentChannel.id, draft);
+        }
     }
 
     handlePostError = (postError) => {
@@ -390,7 +403,7 @@ export default class CreatePost extends React.Component {
 
         if (this.props.enableConfirmNotificationsToChannel &&
             this.props.currentChannelMembersCount > Constants.NOTIFY_ALL_MEMBERS &&
-            PostUtils.containsAtChannel(this.state.message)) {
+            containsAtChannel(this.state.message)) {
             this.showNotifyAllModal();
             return;
         }
@@ -485,16 +498,22 @@ export default class CreatePost extends React.Component {
     }
 
     postMsgKeyPress = (e) => {
-        const ctrlOrMetaKeyPressed = e.ctrlKey || e.metaKey;
-        if (!UserAgent.isMobile() && ((this.props.ctrlSend && ctrlOrMetaKeyPressed) || !this.props.ctrlSend)) {
-            if (Utils.isKeyPressed(e, KeyCodes.ENTER) && !e.shiftKey && !e.altKey) {
-                e.preventDefault();
-                ReactDOM.findDOMNode(this.refs.textbox).blur();
+        const {ctrlSend, codeBlockOnCtrlEnter, currentChannel} = this.props;
+
+        const {allowSending, withClosedCodeBlock, message} = postMessageOnKeyPress(e, this.state.message, ctrlSend, codeBlockOnCtrlEnter);
+
+        if (allowSending) {
+            e.persist();
+            this.refs.textbox.blur();
+
+            if (withClosedCodeBlock && message) {
+                this.setState({message}, () => this.handleSubmit(e));
+            } else {
                 this.handleSubmit(e);
             }
         }
 
-        GlobalActions.emitLocalUserTypingEvent(this.props.currentChannel.id, '');
+        GlobalActions.emitLocalUserTypingEvent(currentChannel.id, '');
     }
 
     handleChange = (e) => {
@@ -536,6 +555,11 @@ export default class CreatePost extends React.Component {
         this.focusTextbox();
     }
 
+    handleUploadProgress = (clientId, name, percent) => {
+        const uploadsProgressPercent = {...this.state.uploadsProgressPercent, [clientId]: {percent, name}};
+        this.setState({uploadsProgressPercent});
+    }
+
     handleFileUploadComplete = (fileInfos, clientIds, channelId) => {
         const draft = {...this.props.draft};
 
@@ -549,13 +573,20 @@ export default class CreatePost extends React.Component {
         }
 
         draft.fileInfos = sortFileInfos(draft.fileInfos.concat(fileInfos), this.props.locale);
-        this.props.actions.setDraft(StoragePrefixes.DRAFT + channelId, draft);
 
-        if (channelId === this.props.currentChannel.id) {
-            this.setState({
-                enableSendButton: true,
-            });
-        }
+        this.setState({
+            actualDrafts: draft,
+        });
+
+        this.draftsTimeout = setTimeout(() => {
+            clearTimeout(this.draftsTimeout);
+            this.props.actions.setDraft(StoragePrefixes.DRAFT + channelId, draft);
+            if (channelId === this.props.currentChannel.id) {
+                this.setState({
+                    enableSendButton: true,
+                });
+            }
+        }, 500);
     }
 
     handleUploadError = (err, clientId, channelId) => {
@@ -637,7 +668,7 @@ export default class CreatePost extends React.Component {
             return;
         }
 
-        if (PostUtils.shouldFocusMainTextbox(e, document.activeElement)) {
+        if (shouldFocusMainTextbox(e, document.activeElement)) {
             this.focusTextbox();
         }
     }
@@ -679,7 +710,7 @@ export default class CreatePost extends React.Component {
         const ctrlOrMetaKeyPressed = e.ctrlKey || e.metaKey;
         const messageIsEmpty = this.state.message.length === 0;
         const draftMessageIsEmpty = this.props.draft.message.length === 0;
-        const ctrlEnterKeyCombo = this.props.ctrlSend && Utils.isKeyPressed(e, KeyCodes.ENTER) && ctrlOrMetaKeyPressed;
+        const ctrlEnterKeyCombo = (this.props.ctrlSend || this.props.codeBlockOnCtrlEnter) && Utils.isKeyPressed(e, KeyCodes.ENTER) && ctrlOrMetaKeyPressed;
         const upKeyOnly = !ctrlOrMetaKeyPressed && !e.altKey && !e.shiftKey && Utils.isKeyPressed(e, KeyCodes.UP);
         const shiftUpKeyCombo = !ctrlOrMetaKeyPressed && !e.altKey && e.shiftKey && Utils.isKeyPressed(e, KeyCodes.UP);
         const ctrlKeyCombo = ctrlOrMetaKeyPressed && !e.altKey && !e.shiftKey;
@@ -887,6 +918,7 @@ export default class CreatePost extends React.Component {
                     fileInfos={draft.fileInfos}
                     onRemove={this.removePreview}
                     uploadsInProgress={draft.uploadsInProgress}
+                    uploadsProgressPercent={this.state.uploadsProgressPercent}
                 />
             );
         }
@@ -925,6 +957,7 @@ export default class CreatePost extends React.Component {
                     getTarget={this.getFileUploadTarget}
                     onFileUploadChange={this.handleFileUploadChange}
                     onUploadStart={this.handleUploadStart}
+                    onUploadProgress={this.handleUploadProgress}
                     onFileUpload={this.handleFileUploadComplete}
                     onUploadError={this.handleUploadError}
                     postType='post'

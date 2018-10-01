@@ -43,6 +43,10 @@
         .icon__archive {
             top: 2px;
         }
+
+        .icon__draft {
+            top: 2px;
+        }
     }
 
     .sidebar-item__name {
@@ -240,6 +244,7 @@
                 outline: none;
                 overflow: hidden;
                 padding: 5px 5px 5px 15px;
+                text-decoration: none;
                 text-align: left;
                 text-overflow: ellipsis;
                 white-space: nowrap;
@@ -252,6 +257,7 @@
                 .icon {
                     &.icon__archive,
                     &.icon__globe,
+                    &.icon__draft,
                     &.icon__lock {
                         @include opacity(.5);
                     }
@@ -314,6 +320,7 @@
                 .icon {
                     &.icon__archive,
                     &.icon__globe,
+                    &.icon__draft,
                     &.icon__lock {
                         @include opacity(.7);
                     }

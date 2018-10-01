@@ -766,7 +766,7 @@ export default {
                             label: t('admin.gitlab.clientIdTitle'),
                             label_default: 'Application ID:',
                             help_text: t('admin.gitlab.clientIdDescription'),
-                            help_text_default: 'Obtain this value via the instructions above for logging into GitLab',
+                            help_text_default: 'Obtain this value via the instructions above for logging into GitLab.',
                             placeholder: t('admin.gitlab.clientIdExample'),
                             placeholder_default: 'E.g.: "jcuS8PuvcpGhpgHhlcpT1Mx42pnqMxQY"',
                             isDisabled: needsUtils.stateValueFalse('GitLabSettings.Enable'),
@@ -804,7 +804,7 @@ export default {
                                 }
                                 return '';
                             },
-                            isDisabled: () => true,
+                            isDisabled: true,
                         },
                         {
                             type: Constants.SettingsTypes.TYPE_TEXT,
@@ -817,7 +817,7 @@ export default {
                                 }
                                 return '';
                             },
-                            isDisabled: () => true,
+                            isDisabled: true,
                         },
                         {
                             type: Constants.SettingsTypes.TYPE_TEXT,
@@ -830,7 +830,7 @@ export default {
                                 }
                                 return '';
                             },
-                            isDisabled: () => true,
+                            isDisabled: true,
                         },
                     ],
                 },
@@ -931,7 +931,7 @@ export default {
                             label: t('admin.gitlab.clientIdTitle'),
                             label_default: 'Application ID:',
                             help_text: t('admin.gitlab.clientIdDescription'),
-                            help_text_default: 'Obtain this value via the instructions above for logging into GitLab',
+                            help_text_default: 'Obtain this value via the instructions above for logging into GitLab.',
                             placeholder: t('admin.gitlab.clientIdExample'),
                             placeholder_default: 'E.g.: "jcuS8PuvcpGhpgHhlcpT1Mx42pnqMxQY"',
                             isHidden: needsUtils.not(needsUtils.stateValueEqual('oauthType', 'gitlab')),
@@ -969,7 +969,7 @@ export default {
                                 }
                                 return '';
                             },
-                            isDisabled: () => true,
+                            isDisabled: true,
                             isHidden: needsUtils.not(needsUtils.stateValueEqual('oauthType', 'gitlab')),
                         },
                         {
@@ -983,7 +983,7 @@ export default {
                                 }
                                 return '';
                             },
-                            isDisabled: () => true,
+                            isDisabled: true,
                             isHidden: needsUtils.not(needsUtils.stateValueEqual('oauthType', 'gitlab')),
                         },
                         {
@@ -997,7 +997,7 @@ export default {
                                 }
                                 return '';
                             },
-                            isDisabled: () => true,
+                            isDisabled: true,
                             isHidden: needsUtils.not(needsUtils.stateValueEqual('oauthType', 'gitlab')),
                         },
                         {
@@ -1028,7 +1028,7 @@ export default {
                             label: t('admin.google.userTitle'),
                             label_default: 'User API Endpoint:',
                             dynamic_value: () => 'https://www.googleapis.com/plus/v1/people/me',
-                            isDisabled: () => true,
+                            isDisabled: true,
                             isHidden: needsUtils.not(needsUtils.stateValueEqual('oauthType', 'google')),
                         },
                         {
@@ -1037,7 +1037,7 @@ export default {
                             label: t('admin.google.authTitle'),
                             label_default: 'Auth Endpoint:',
                             dynamic_value: () => 'https://accounts.google.com/o/oauth2/v2/auth',
-                            isDisabled: () => true,
+                            isDisabled: true,
                             isHidden: needsUtils.not(needsUtils.stateValueEqual('oauthType', 'google')),
                         },
                         {
@@ -1046,7 +1046,7 @@ export default {
                             label: t('admin.google.tokenTitle'),
                             label_default: 'Token Endpoint:',
                             dynamic_value: () => 'https://www.googleapis.com/oauth2/v4/token',
-                            isDisabled: () => true,
+                            isDisabled: true,
                             isHidden: needsUtils.not(needsUtils.stateValueEqual('oauthType', 'google')),
                         },
                         {
@@ -1077,7 +1077,7 @@ export default {
                             label: t('admin.office365.userTitle'),
                             label_default: 'User API Endpoint:',
                             dynamic_value: () => 'https://graph.microsoft.com/v1.0/me',
-                            isDisabled: () => true,
+                            isDisabled: true,
                             isHidden: needsUtils.not(needsUtils.stateValueEqual('oauthType', 'office365')),
                         },
                         {
@@ -1086,7 +1086,7 @@ export default {
                             label: t('admin.office365.authTitle'),
                             label_default: 'Auth Endpoint:',
                             dynamic_value: () => 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
-                            isDisabled: () => true,
+                            isDisabled: true,
                             isHidden: needsUtils.not(needsUtils.stateValueEqual('oauthType', 'office365')),
                         },
                         {
@@ -1095,7 +1095,7 @@ export default {
                             label: t('admin.office365.tokenTitle'),
                             label_default: 'Token Endpoint:',
                             dynamic_value: () => 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
-                            isDisabled: () => true,
+                            isDisabled: true,
                             isHidden: needsUtils.not(needsUtils.stateValueEqual('oauthType', 'office365')),
                         },
                     ],
@@ -2772,6 +2772,26 @@ export default {
                             label_default: 'Support Email:',
                             help_text: t('admin.support.emailHelp'),
                             help_text_default: 'Email address displayed on email notifications and during tutorial for end users to ask support questions.',
+                        },
+                        {
+                            type: Constants.SettingsTypes.TYPE_BOOL,
+                            key: 'SupportSettings.CustomServiceTermsEnabled',
+                            label: 'admin.support.enableServiceTermsTitle',
+                            label_default: 'Enable Custom Terms of Service (Beta)',
+                            help_text: 'admin.support.serviceTermsHelp',
+                            help_text_default: 'When true, new users must accept the terms of service before accessing any Mattermost teams on desktop, web or mobile. Existing users must accept them after login or a page refresh.\n \nUsers on mobile do not have to accept the terms of service with mobile support scheduled for an upcoming release.',
+                            help_text_markdown: true,
+                            isHidden: needsUtils.not(needsUtils.hasLicenseFeature('CustomTermsOfService')),
+                        },
+                        {
+                            type: Constants.SettingsTypes.TYPE_LONG_TEXT,
+                            key: 'SupportSettings.CustomServiceTermsText',
+                            label: 'admin.support.serviceTermsTextTitle',
+                            label_default: 'Custom Terms of Service Text (Beta)',
+                            isDisabled: needsUtils.stateValueFalse('SupportSettings.CustomServiceTermsEnabled'),
+                            isHidden: needsUtils.not(needsUtils.hasLicenseFeature('CustomTermsOfService')),
+                            help_text: 'admin.support.serviceTermsTextHelp',
+                            help_text_default: 'Text that will appear in your custom Terms of Service. Supports Markdown-formatted text.',
                         },
                     ],
                 },

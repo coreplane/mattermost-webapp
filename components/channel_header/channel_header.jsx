@@ -80,6 +80,7 @@ export default class ChannelHeader extends React.Component {
             Object.values(RHSStates)
         ),
         lastViewedChannelName: PropTypes.string.isRequired,
+        penultimateViewedChannelName: PropTypes.string.isRequired,
         enableWebrtc: PropTypes.bool.isRequired,
     };
 
@@ -858,7 +859,7 @@ export default class ChannelHeader extends React.Component {
                                 role='menuitem'
                                 modalId={ModalIdentifiers.DELETE_CHANNEL}
                                 dialogType={DeleteChannelModal}
-                                dialogProps={{channel}}
+                                dialogProps={{channel, penultimateViewedChannelName: this.props.penultimateViewedChannelName}}
                             >
                                 <FormattedMessage
                                     id='channel_header.delete'
@@ -1085,11 +1086,9 @@ export default class ChannelHeader extends React.Component {
                         id='toggleMute'
                         onClick={this.unmute}
                         className={'style--none color--link channel-header__mute inactive'}
+                        aria-label={Utils.localizeMessage('generic_icons.muted', 'Muted Icon')}
                     >
-                        <i
-                            className={'icon fa fa-bell-slash-o'}
-                            title={Utils.localizeMessage('generic_icons.muted', 'Muted Icon')}
-                        />
+                        <i className={'icon fa fa-bell-slash-o'}/>
                     </button>
                 </OverlayTrigger>
             );

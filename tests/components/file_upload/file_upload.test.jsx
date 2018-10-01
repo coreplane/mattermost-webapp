@@ -43,6 +43,7 @@ describe('components/FileUpload', () => {
         onFileUploadChange: emptyFunction,
         onUploadError: emptyFunction,
         onUploadStart: emptyFunction,
+        onUploadProgress: emptyFunction,
         postType: 'post',
         uploadFile: emptyFunction,
         maxFileSize: MaxFileSize,
@@ -147,7 +148,7 @@ describe('components/FileUpload', () => {
             <FileUpload {...props}/>
         );
 
-        wrapper.instance().uploadFiles(files);
+        wrapper.instance().checkPluginHooksAndUploadFiles(files);
 
         expect(uploadFile).toHaveBeenCalledTimes(2);
 
@@ -170,7 +171,7 @@ describe('components/FileUpload', () => {
             <FileUpload {...props}/>
         );
 
-        wrapper.instance().uploadFiles(files);
+        wrapper.instance().checkPluginHooksAndUploadFiles(files);
 
         expect(uploadFile).not.toBeCalled();
 
@@ -192,7 +193,7 @@ describe('components/FileUpload', () => {
             <FileUpload {...props}/>
         );
 
-        wrapper.instance().uploadFiles(files);
+        wrapper.instance().checkPluginHooksAndUploadFiles(files);
 
         expect(uploadFile).not.toBeCalled();
 
@@ -213,7 +214,7 @@ describe('components/FileUpload', () => {
             <FileUpload {...props}/>
         );
 
-        wrapper.instance().uploadFiles(files);
+        wrapper.instance().checkPluginHooksAndUploadFiles(files);
 
         expect(uploadFile).not.toBeCalled();
 
@@ -268,5 +269,54 @@ describe('components/FileUpload', () => {
 
         expect(onFileUploadChange).toBeCalled();
         expect(onFileUploadChange).toHaveBeenCalledWith();
+    });
+
+    test('FilesWillUploadHook - should reject all files', () => {
+        const onUploadError = jest.fn();
+        const uploadFile = jest.fn();
+        const onUploadStart = jest.fn();
+        const pluginHook = () => {
+            return {files: null};
+        };
+        const props = {...baseProps, onUploadError, uploadFile, onUploadStart, pluginFilesWillUploadHooks: [{hook: pluginHook}]};
+        const files = [{name: 'file1.pdf'}, {name: 'file2.jpg'}];
+
+        const wrapper = shallowWithIntl(
+            <FileUpload {...props}/>
+        );
+
+        wrapper.instance().checkPluginHooksAndUploadFiles(files);
+
+        expect(uploadFile).toHaveBeenCalledTimes(0);
+
+        expect(onUploadStart).toHaveBeenCalledTimes(0);
+
+        expect(onUploadError).toHaveBeenCalledTimes(1);
+        expect(onUploadError).toHaveBeenCalledWith(null);
+    });
+
+    test('FilesWillUploadHook - should reject one file and allow one file', () => {
+        const onUploadError = jest.fn();
+        const uploadFile = jest.fn();
+        const onUploadStart = jest.fn();
+        const pluginHook = (files) => {
+            return {files: files.filter((f) => f.name === 'file1.pdf')};
+        };
+        const props = {...baseProps, onUploadError, uploadFile, onUploadStart, pluginFilesWillUploadHooks: [{hook: pluginHook}]};
+        const files = [{name: 'file1.pdf'}, {name: 'file2.jpg'}];
+
+        const wrapper = shallowWithIntl(
+            <FileUpload {...props}/>
+        );
+
+        wrapper.instance().checkPluginHooksAndUploadFiles(files);
+
+        expect(uploadFile).toHaveBeenCalledTimes(1);
+
+        expect(onUploadStart).toHaveBeenCalledTimes(1);
+        expect(onUploadStart).toHaveBeenCalledWith(['generated_id_1'], props.currentChannelId);
+
+        expect(onUploadError).toHaveBeenCalledTimes(1);
+        expect(onUploadError).toHaveBeenCalledWith(null);
     });
 });

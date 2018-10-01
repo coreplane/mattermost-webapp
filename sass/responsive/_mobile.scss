@@ -67,6 +67,10 @@
                 display: block;
             }
 
+            .custom-textarea {
+                max-height: 162px;
+            }
+
             textarea {
                 .app-content & {
                     border-left: none;
@@ -639,6 +643,10 @@
         font-size: .9em;
         margin-bottom: 30px;
         padding: 60px 10px 0;
+
+        .min-height--fill {
+            min-height: calc(100vh - 526px);
+        }
 
         .signup-team__name {
             font-size: 2em;
@@ -1448,6 +1456,17 @@
 }
 
 @media screen and (max-width: 640px) {
+    .multi-select__help {
+        flex-direction: column;
+
+        > span {
+            &:first-child {
+                margin-bottom: 1rem;
+            }
+        }
+    }
+
+
     .post__header {
         .dropdown-menu {
             > li {
@@ -1819,6 +1838,14 @@
 
         .signup-team__name {
             font-size: 2em;
+        }
+    }
+}
+
+@media screen and (max-width: 380px) {
+    .signup-team__container {
+        .min-height--fill {
+            min-height: 0;
         }
     }
 }

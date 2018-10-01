@@ -13,18 +13,16 @@ import * as GlobalActions from 'actions/global_actions.jsx';
 import Constants from 'utils/constants.jsx';
 import * as UserAgent from 'utils/user_agent.jsx';
 import * as Utils from 'utils/utils.jsx';
-import * as PostUtils from 'utils/post_utils.jsx';
+import {containsAtChannel, postMessageOnKeyPress, shouldFocusMainTextbox} from 'utils/post_utils.jsx';
 
 import ConfirmModal from 'components/confirm_modal.jsx';
 import EmojiPickerOverlay from 'components/emoji_picker/emoji_picker_overlay.jsx';
-import FilePreview from 'components/file_preview.jsx';
+import FilePreview from 'components/file_preview/file_preview.jsx';
 import FileUpload from 'components/file_upload';
 import MsgTyping from 'components/msg_typing';
 import PostDeletedModal from 'components/post_deleted_modal.jsx';
 import EmojiIcon from 'components/svg/emoji_icon';
 import Textbox from 'components/textbox.jsx';
-
-const KeyCodes = Constants.KeyCodes;
 
 export default class CreateComment extends React.PureComponent {
     static propTypes = {
@@ -67,6 +65,11 @@ export default class CreateComment extends React.PureComponent {
          * Whether the submit button is enabled
          */
         enableAddButton: PropTypes.bool.isRequired,
+
+        /**
+         * Force message submission on CTRL/CMD + ENTER
+         */
+        codeBlockOnCtrlEnter: PropTypes.bool,
 
         /**
          * Set to force form submission on CTRL/CMD + ENTER instead of ENTER
@@ -168,9 +171,12 @@ export default class CreateComment extends React.PureComponent {
                 uploadsInProgress: [],
                 fileInfos: [],
             },
+            actualDrafts: {},
+            uploadsProgressPercent: {},
         };
 
         this.lastBlurAt = 0;
+        this.draftsTimeout = null;
     }
 
     UNSAFE_componentWillMount() { // eslint-disable-line camelcase
@@ -187,6 +193,12 @@ export default class CreateComment extends React.PureComponent {
     componentWillUnmount() {
         this.props.resetCreatePostRequest();
         document.removeEventListener('keydown', this.focusTextboxIfNecessary);
+
+        if (this.draftsTimeout) {
+            const {draft, actualDrafts} = this.state;
+            clearTimeout(this.draftsTimeout);
+            this.props.onUpdateCommentDraft({...draft, fileInfos: actualDrafts.fileInfos, uploadsInProgress: actualDrafts.uploadsInProgress});
+        }
     }
 
     UNSAFE_componentWillReceiveProps(newProps) { // eslint-disable-line camelcase
@@ -225,7 +237,7 @@ export default class CreateComment extends React.PureComponent {
             return;
         }
 
-        if (PostUtils.shouldFocusMainTextbox(e, document.activeElement)) {
+        if (shouldFocusMainTextbox(e, document.activeElement)) {
             this.focusTextbox();
         }
     }
@@ -313,7 +325,7 @@ export default class CreateComment extends React.PureComponent {
 
         if (this.props.enableConfirmNotificationsToChannel &&
             this.props.channelMembersCount > Constants.NOTIFY_ALL_MEMBERS &&
-            PostUtils.containsAtChannel(this.state.draft.message)) {
+            containsAtChannel(this.state.draft.message)) {
             this.showNotifyAllModal();
             return;
         }
@@ -370,15 +382,30 @@ export default class CreateComment extends React.PureComponent {
     }
 
     commentMsgKeyPress = (e) => {
-        if (!UserAgent.isMobile() && ((this.props.ctrlSend && (e.ctrlKey || e.metaKey)) || !this.props.ctrlSend)) {
-            if (Utils.isKeyPressed(e, KeyCodes.ENTER) && !e.shiftKey && !e.altKey) {
-                e.preventDefault();
-                this.refs.textbox.blur();
+        const {
+            ctrlSend,
+            codeBlockOnCtrlEnter,
+            channelId,
+            rootId,
+        } = this.props;
+
+        const {allowSending, withClosedCodeBlock, message} = postMessageOnKeyPress(e, this.state.draft.message, ctrlSend, codeBlockOnCtrlEnter);
+
+        if (allowSending) {
+            e.persist();
+            this.refs.textbox.blur();
+
+            if (withClosedCodeBlock && message) {
+                const {draft} = this.state;
+                const updatedDraft = {...draft, message};
+                this.props.onUpdateCommentDraft(updatedDraft);
+                this.setState({draft: updatedDraft}, () => this.handleSubmit(e));
+            } else {
                 this.handleSubmit(e);
             }
         }
 
-        GlobalActions.emitLocalUserTypingEvent(this.props.channelId, this.props.rootId);
+        GlobalActions.emitLocalUserTypingEvent(channelId, rootId);
     }
 
     scrollToBottom = () => {
@@ -394,13 +421,17 @@ export default class CreateComment extends React.PureComponent {
         const {draft} = this.state;
         const updatedDraft = {...draft, message};
         this.props.onUpdateCommentDraft(updatedDraft);
-        this.setState({draft: updatedDraft});
-
-        this.scrollToBottom();
+        this.setState({draft: updatedDraft}, () => {
+            this.scrollToBottom();
+        });
     }
 
     handleKeyDown = (e) => {
-        if (this.props.ctrlSend && Utils.isKeyPressed(e, Constants.KeyCodes.ENTER) && (e.ctrlKey || e.metaKey)) {
+        if (
+            (this.props.ctrlSend || this.props.codeBlockOnCtrlEnter) &&
+            Utils.isKeyPressed(e, Constants.KeyCodes.ENTER) &&
+            (e.ctrlKey || e.metaKey)
+        ) {
             this.commentMsgKeyPress(e);
             return;
         }
@@ -443,6 +474,11 @@ export default class CreateComment extends React.PureComponent {
         this.focusTextbox();
     }
 
+    handleUploadProgress = (clientId, name, percent) => {
+        const uploadsProgressPercent = {...this.state.uploadsProgressPercent, [clientId]: {percent, name}};
+        this.setState({uploadsProgressPercent});
+    }
+
     handleFileUploadComplete = (fileInfos, clientIds) => {
         const {draft} = this.state;
         const uploadsInProgress = [...draft.uploadsInProgress];
@@ -457,8 +493,15 @@ export default class CreateComment extends React.PureComponent {
             }
         }
 
-        this.props.onUpdateCommentDraft({...draft, fileInfos: newFileInfos, uploadsInProgress});
-        this.setState({draft: {...draft, fileInfos: newFileInfos, uploadsInProgress}});
+        this.setState({
+            actualDrafts: {...draft, fileInfos: newFileInfos, uploadsInProgress},
+        });
+
+        this.draftsTimeout = setTimeout(() => {
+            clearTimeout(this.draftsTimeout);
+            this.props.onUpdateCommentDraft({...draft, fileInfos: newFileInfos, uploadsInProgress});
+            this.setState({draft: {...draft, fileInfos: newFileInfos, uploadsInProgress}});
+        }, 500);
 
         // Focus on preview if needed/possible - if user has switched teams since starting the file upload,
         // the preview will be undefined and the switch will fail
@@ -606,6 +649,7 @@ export default class CreateComment extends React.PureComponent {
                     fileInfos={draft.fileInfos}
                     onRemove={this.removePreview}
                     uploadsInProgress={draft.uploadsInProgress}
+                    uploadsProgressPercent={this.state.uploadsProgressPercent}
                     ref='preview'
                 />
             );
@@ -644,6 +688,7 @@ export default class CreateComment extends React.PureComponent {
                     getTarget={this.getFileUploadTarget}
                     onFileUploadChange={this.handleFileUploadChange}
                     onUploadStart={this.handleUploadStart}
+                    onUploadProgress={this.handleUploadProgress}
                     onFileUpload={this.handleFileUploadComplete}
                     onUploadError={this.handleUploadError}
                     postType='comment'
